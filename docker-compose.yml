@@ -1,0 +1,17 @@
+version: '2'
+services:
+  ros:
+    image: registry.coneptum.com:443/udacity/udacity:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        buildno: 1
+    command: ["sleep","500000"]
+    volumes:
+      - ../RL-Quadcopter:/catwin_ws/src/RL-Quadcopter
+    ports:
+      - 11311:11311
+      - 8888:8888
+    stdin_open: true
+    tty: true
