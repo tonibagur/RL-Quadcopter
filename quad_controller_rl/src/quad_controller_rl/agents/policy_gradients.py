@@ -215,6 +215,13 @@ class DDPG(BaseAgent):
         self.gamma = 0.99  # discount factor
         self.tau = 0.01  # for soft update of target parameters
         self.reset_episode()
+        self.log_file = "/tmp/takeoff.log"
+        open(self.log_file, "w").close()
+
+    def log(self, stuff):
+        print("log")
+        with open(self.log_file, "a") as f:
+            f.write(str(stuff)+'\n')
 
     def reset_episode(self):
         self.noise.reset()
@@ -238,6 +245,7 @@ class DDPG(BaseAgent):
 
         if done:
             print("total episode reward:" + str(self.total_reward))
+            self.log(self.total_reward)
             self.reset_episode()
             action = None
         else:
