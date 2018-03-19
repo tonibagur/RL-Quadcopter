@@ -66,15 +66,18 @@ class Actor:
         states = layers.Input(shape=(self.state_size,), name='states')
 
         # Add hidden layers
-        net = layers.Dense(units=32, activation='relu')(states)
-        net = layers.Dense(units=64, activation='relu')(net)
-        net = layers.Dense(units=32, activation='relu')(net)
+        net = layers.Dense(units=32, activation='relu',kernel_initializer='glorot_normal')(states)
+        net = layers.BatchNormalization()(net)
+        net = layers.Dense(units=64, activation='relu',kernel_initializer='glorot_normal')(net)
+        net = layers.BatchNormalization()(net)
+        net = layers.Dense(units=32, activation='relu',kernel_initializer='glorot_normal')(net)
+        net = layers.BatchNormalization()(net)
 
         # Try different layer sizes, activations, add batch normalization, regularizers, etc.
 
         # Add final output layer with sigmoid activation
         raw_actions = layers.Dense(units=self.action_size, activation='sigmoid',
-            name='raw_actions')(net)
+            name='raw_actions',kernel_initializer='glorot_normal')(net)
 
         # Scale [0, 1] output for each action dimension to proper range
         actions = layers.Lambda(lambda x: (x * self.action_range) + self.action_low,
@@ -90,7 +93,7 @@ class Actor:
         # Incorporate any additional losses here (e.g. from regularizers)
 
         # Define optimizer and training function
-        optimizer = optimizers.Adam()
+        optimizer = optimizers.Adam(lr=0.001)
         updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
         self.train_fn = K.function(
             inputs=[self.model.input, action_gradients, K.learning_phase()],
@@ -123,12 +126,16 @@ class Critic:
         actions = layers.Input(shape=(self.action_size,), name='actions')
 
         # Add hidden layer(s) for state pathway
-        net_states = layers.Dense(units=32, activation='relu')(states)
-        net_states = layers.Dense(units=64, activation='relu')(net_states)
+        net_states = layers.Dense(units=32, activation='relu',kernel_initializer='glorot_normal')(states)
+        net_states = layers.BatchNormalization()(net_states)
+        net_states = layers.Dense(units=64, activation='relu',kernel_initializer='glorot_normal')(net_states)
+        net_states = layers.BatchNormalization()(net_states)
 
         # Add hidden layer(s) for action pathway
-        net_actions = layers.Dense(units=32, activation='relu')(actions)
-        net_actions = layers.Dense(units=64, activation='relu')(net_actions)
+        net_actions = layers.Dense(units=32, activation='relu',kernel_initializer='glorot_normal')(actions)
+        net_actions = layers.BatchNormalization()(net_actions)
+        net_actions = layers.Dense(units=64, activation='relu',kernel_initializer='glorot_normal')(net_actions)
+        net_actions = layers.BatchNormalization()(net_actions)
 
         # Try different layer sizes, activations, add batch normalization, regularizers, etc.
 
@@ -139,13 +146,13 @@ class Critic:
         # Add more layers to the combined network if needed
 
         # Add final output layer to prduce action values (Q values)
-        Q_values = layers.Dense(units=1, name='q_values')(net)
+        Q_values = layers.Dense(units=1, name='q_values',kernel_initializer='glorot_normal')(net)
 
         # Create Keras model
         self.model = models.Model(inputs=[states, actions], outputs=Q_values)
 
         # Define optimizer and compile model for training with built-in loss function
-        optimizer = optimizers.Adam()
+        optimizer = optimizers.Adam(lr=0.0001)
         self.model.compile(optimizer=optimizer, loss='mse')
 
         # Compute action gradients (derivative of Q values w.r.t. to actions)
@@ -207,16 +214,23 @@ class DDPG(BaseAgent):
         self.noise = OUNoise(self.action_size, self.exploration_mu, self.exploration_theta, self.exploration_sigma)
 
         # Replay memory
-        self.buffer_size = 100000
+        self.buffer_size = 1000000
         self.batch_size = 64
         self.memory = ReplayBuffer(self.buffer_size, self.batch_size)
 
         # Algorithm parameters
         self.gamma = 0.99  # discount factor
-        self.tau = 0.01  # for soft update of target parameters
+        self.tau = 0.01  # for soft update of target parameters # the paper uses 0.001
         self.reset_episode()
+        
+        # Logging stuff
         self.log_file = "/tmp/takeoff.log"
         open(self.log_file, "w").close()
+
+        #Normalizing constants
+        self.cube_size = 300
+        self.offset = [self.cube_size/2.,self.cube_size/2.,0,1.,1.,1.,1.]
+        self.range = [self.cube_size,self.cube_size,self.cube_size,2.,2.,2.,2.]
 
     def log(self, stuff):
         print("log")
@@ -230,6 +244,8 @@ class DDPG(BaseAgent):
         self.total_reward = 0.
 
     def step(self, next_state, reward, done):
+        # Normalize
+        next_state = (next_state + self.offset)/self.range
         # Save experience / reward
         self.total_reward += reward
         if not(self.last_state is None):
@@ -262,8 +278,12 @@ class DDPG(BaseAgent):
     def act(self, states):
         """Returns actions for given state(s) as per current policy."""
         state = np.reshape(states, [-1, self.state_size])
-        action = self.actor_local.model.predict(state)[0]
-        return action + self.noise.sample()  # add some noise for exploration
+        action = self.actor_local.model.predict(state)
+        #print(self.noise.sample())
+        result = action + self.noise.sample()*25  # add some noise for exploration
+        if random.randint(0,100)==0:
+            print(result)
+        return result
 
     def learn(self, experiences):
         """Update policy and value parameters using given batch of experience tuples."""

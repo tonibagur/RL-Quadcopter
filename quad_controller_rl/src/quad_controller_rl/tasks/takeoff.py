@@ -47,6 +47,10 @@ class Takeoff(BaseTask):
         # Compute reward / penalty and check if this episode is complete
         done = False
         reward = -min(abs(self.target_z - pose.position.z), 20.0)  # reward = zero for matching target z, -ve as you go farther, upto -20
+        o = pose.orientation 
+        p = pose.position 
+        #reward -= (abs(o.x) + abs(o.y))
+        #reward -= (abs(p.x) + abs(p.y)) 
         if pose.position.z >= self.target_z:  # agent has crossed the target height
             reward += 10.0  # bonus reward
             done = True
